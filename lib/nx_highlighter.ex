@@ -143,8 +143,7 @@ defmodule NxHighlighter do
 
         blended =
           patch_f32
-          |> Nx.multiply(1 - mask_f32 * alpha)
-          |> Nx.add(color_f32 * mask_f32 * alpha)
+          |> Nx.add(color_f32 |> Nx.subtract(patch_f32) |> Nx.multiply(mask_f32) |> Nx.multiply(alpha))
           |> Nx.as_type(:u8)
 
         updated_canvas = Nx.put_slice(canvas, [start_y, start_x, 0], blended)

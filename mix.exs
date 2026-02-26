@@ -23,7 +23,8 @@ defmodule NxHighlighter.MixProject do
     [
       {:nx, "~> 0.10"},
       {:exla, "~> 0.10"},
-      {:stb_image, "~> 0.6"}
+      {:stb_image, "~> 0.6"},
+      {:benchee, "~> 1.3", only: [:dev, :test]}
     ]
   end
 end
