@@ -1,4 +1,5 @@
 # NxHighlighter
+[![test](https://github.com/preciz/nx_highlighter/actions/workflows/test.yml/badge.svg)](https://github.com/preciz/nx_highlighter/actions/workflows/test.yml)
 
 Image highlighting using Nx and tensors.
 
