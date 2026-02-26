@@ -47,3 +47,7 @@ If you are already working with tensors, you can use `highlight_tensor/3` to avo
 ```elixir
 {:ok, result_tensor} = NxHighlighter.highlight_tensor(my_tensor, regions)
 ```
+
+## License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
