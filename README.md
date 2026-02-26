@@ -1,11 +1,11 @@
 # NxHighlighter
 
-High-performance image highlighting using Nx and tensors. Optimized for speed using JIT-compiled batched operations and horizontal region merging.
+Image highlighting using Nx and tensors.
 
 ## Features
 
-- **Blazing Fast:** Uses XLA-accelerated Nx operations.
-- **Optimized Blending:** Custom formula reduces multiplications by 8%.
+- **XLA Accelerated:** Uses Nx operations for efficiency.
+- **Blending Formula:** Custom formula for highlight transparency.
 - **Region Merging:** Automatically merges horizontal highlights of the same color that are close to each other.
 - **Configurable Alpha:** Global alpha blending (default 0.4).
 - **Flexible Input:** Accepts PNG/JPEG binaries, `StbImage` structs, or `Nx.Tensor`.
