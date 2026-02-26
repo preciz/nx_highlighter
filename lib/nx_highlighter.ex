@@ -1,6 +1,19 @@
 defmodule NxHighlighter do
   @moduledoc """
   High-performance image highlighting using Nx and tensors.
+
+  This library provides a fast way to highlight multiple rectangular regions in an image.
+  It is optimized for performance by using:
+
+    * **JIT-compiled batched operations**: Instead of looping over regions in Elixir,
+      it uses a `defn` block with a `while` loop that runs efficiently on CPU or GPU (via XLA).
+    * **Horizontal region merging**: Automatically merges adjacent or nearby horizontal
+      highlights of the same color (e.g., merging individual word highlights into a single line).
+    * **Optimized blending formula**: Uses a specialized blending math that reduces
+      multiplication operations.
+
+  The core function `highlight/3` handles different input types (binaries, tensors, StbImage)
+  and returns a PNG binary.
   """
   import Nx.Defn
 
@@ -16,13 +29,28 @@ defmodule NxHighlighter do
 
   @doc """
   Highlights the given regions on an image.
-  Accepts a PNG/JPEG binary, an StbImage struct, or an Nx.Tensor.
-  Returns {:ok, binary} with the modified PNG or {:error, term}.
 
-  Options:
-    * `:alpha` - The blending alpha value (default: 0.4).
+  ## Parameters
+
+    * `image_input` - Can be a binary (PNG/JPEG), an `StbImage` struct, or an `Nx.Tensor`.
+    * `regions` - A list of maps, each containing:
+      * `:x`, `:y` - Top-left coordinates.
+      * `:w`, `:h` - Width and height of the highlight.
+      * `:color` - A list of 3 integers `[R, G, B]` (0-255).
+    * `opts` - A keyword list of options.
+
+  ## Options
+
+    * `:alpha` - The blending alpha value between 0.0 and 1.0 (default: 0.4).
+
+  ## Examples
+
+      iex> regions = [%{x: 10, y: 10, w: 100, h: 20, color: [255, 0, 0]}]
+      iex> {:ok, png_bin} = NxHighlighter.highlight(image_bin, regions, alpha: 0.5)
+
+  Returns `{:ok, binary}` with the modified PNG or `{:error, term}`.
   """
-  @spec highlight(binary() | StbImage.t() | Nx.Tensor.t(), [region()], keyword()) ::
+  @spec highlight(binary() | struct() | Nx.Tensor.t(), [region()], keyword()) ::
           {:ok, binary()} | {:error, term()}
   def highlight(image_input, regions, opts \\ []) do
     alpha = Keyword.get(opts, :alpha, @default_alpha)
