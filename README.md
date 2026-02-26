@@ -7,6 +7,8 @@ Image highlighting using Nx and tensors.
 - **XLA Accelerated:** Uses Nx operations for efficiency.
 - **Blending Formula:** Custom formula for highlight transparency.
 - **Region Merging:** Automatically merges horizontal highlights of the same color that are close to each other.
+- **Configurable Alpha:** Global alpha blending (default 0.4).
+- **Flexible I/O:** Accepts and returns PNG/JPEG binaries, `StbImage` structs, or `Nx.Tensor`.
 
 ## Installation
 
