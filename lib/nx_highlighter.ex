@@ -1,19 +1,18 @@
 defmodule NxHighlighter do
   @moduledoc """
-  High-performance image highlighting using Nx and tensors.
+  Image highlighting using Nx and tensors.
 
-  This library provides a fast way to highlight multiple rectangular regions in an image.
-  It is optimized for performance by using:
+  This library provides a way to highlight multiple rectangular regions in an image.
+  It uses:
 
-    * **JIT-compiled batched operations**: Instead of looping over regions in Elixir,
-      it uses a `defn` block with a `while` loop that runs efficiently on CPU or GPU (via XLA).
+    * **Nx operations**: Highlights are applied using Nx tensors, which can be
+      accelerated by XLA.
     * **Horizontal region merging**: Automatically merges adjacent or nearby horizontal
-      highlights of the same color (e.g., merging individual word highlights into a single line).
-    * **Optimized blending formula**: Uses a specialized blending math that reduces
-      multiplication operations.
+      highlights of the same color.
+    * **Blending formula**: Uses an alpha blending formula to apply highlights.
 
   The core function `highlight/3` handles different input types (binaries, tensors, StbImage)
-  and returns a PNG binary.
+  and returns the result in the same format as the input.
   """
   import Nx.Defn
 
@@ -45,20 +44,43 @@ defmodule NxHighlighter do
 
   ## Examples
 
-      iex> regions = [%{x: 10, y: 10, w: 100, h: 20, color: [255, 0, 0]}]
-      iex> {:ok, png_bin} = NxHighlighter.highlight(image_bin, regions, alpha: 0.5)
-
-  Returns `{:ok, binary}` with the modified PNG or `{:error, term}`.
+      iex> tensor = Nx.broadcast(255, {100, 100, 3}) |> Nx.as_type(:u8)
+      iex> regions = [%{x: 10, y: 10, w: 10, h: 10, color: [255, 0, 0]}]
+      iex> {:ok, result} = NxHighlighter.highlight(tensor, regions, alpha: 0.5)
+      iex> Nx.shape(result)
+      {100, 100, 3}
   """
   @spec highlight(binary() | struct() | Nx.Tensor.t(), [region()], keyword()) ::
-          {:ok, binary()} | {:error, term()}
+          {:ok, binary() | struct() | Nx.Tensor.t()} | {:error, term()}
   def highlight(image_input, regions, opts \\ []) do
     alpha = Keyword.get(opts, :alpha, @default_alpha)
     tensor = to_tensor(image_input)
+
+    case highlight_tensor(tensor, regions, alpha: alpha) do
+      {:ok, result_tensor} ->
+        from_tensor(result_tensor, image_input)
+
+      {:error, _} = error ->
+        error
+    end
+  rescue
+    exception ->
+      {:error, exception}
+  end
+
+  @doc """
+  Highlights the given regions on an Nx tensor.
+
+  Returns `{:ok, tensor}` or `{:error, term}`.
+  """
+  @spec highlight_tensor(Nx.Tensor.t(), [region()], keyword()) ::
+          {:ok, Nx.Tensor.t()} | {:error, term()}
+  def highlight_tensor(tensor, regions, opts \\ []) do
+    alpha = Keyword.get(opts, :alpha, @default_alpha)
     {height, width, _} = Nx.shape(tensor)
 
     if regions == [] do
-      tensor_to_png(tensor)
+      {:ok, tensor}
     else
       optimized_regions = optimize_regions(regions)
 
@@ -87,9 +109,11 @@ defmodule NxHighlighter do
         tensor
         |> Nx.pad(0, [{0, max_h, 0}, {0, max_w, 0}, {0, 0, 0}])
 
-      apply_batch_highlights(padded_image, starts, masks, batch_colors, alpha)
-      |> Nx.slice([0, 0, 0], [height, width, 3])
-      |> tensor_to_png()
+      result =
+        apply_batch_highlights(padded_image, starts, masks, batch_colors, alpha)
+        |> Nx.slice([0, 0, 0], [height, width, 3])
+
+      {:ok, result}
     end
   rescue
     exception ->
@@ -141,12 +165,15 @@ defmodule NxHighlighter do
   defp to_tensor(%StbImage{} = image), do: StbImage.to_nx(image)
   defp to_tensor(%Nx.Tensor{} = tensor), do: tensor
 
-  defp tensor_to_png(tensor) do
+  defp from_tensor(tensor, binary) when is_binary(binary) do
     tensor
     |> StbImage.from_nx()
     |> StbImage.to_binary(:png)
     |> then(&{:ok, &1})
   end
+
+  defp from_tensor(tensor, %StbImage{}), do: {:ok, StbImage.from_nx(tensor)}
+  defp from_tensor(tensor, %Nx.Tensor{}), do: {:ok, tensor}
 
   defn apply_batch_highlights(padded_image, starts, masks, colors, alpha) do
     count = Nx.axis_size(starts, 0)

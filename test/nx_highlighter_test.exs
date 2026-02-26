@@ -21,14 +21,15 @@ defmodule NxHighlighterTest do
       tensor = Nx.broadcast(255, {10, 10, 3}) |> Nx.as_type(:u8)
       stb_image = StbImage.from_nx(tensor)
       regions = [%{x: 2, y: 2, w: 2, h: 2, color: [0, 255, 0]}]
-      assert {:ok, result_png} = NxHighlighter.highlight(stb_image, regions)
-      assert is_binary(result_png)
+      assert {:ok, result} = NxHighlighter.highlight(stb_image, regions)
+      assert %StbImage{} = result
     end
 
     test "highlights using Tensor input", %{tensor: tensor} do
       regions = [%{x: 0, y: 0, w: 5, h: 5, color: [0, 0, 255]}]
-      assert {:ok, result_png} = NxHighlighter.highlight(tensor, regions)
-      assert is_binary(result_png)
+      assert {:ok, result} = NxHighlighter.highlight(tensor, regions)
+      assert %Nx.Tensor{} = result
+      assert Nx.shape(result) == {100, 100, 3}
     end
 
     test "returns error on invalid binary input" do
@@ -42,9 +43,23 @@ defmodule NxHighlighterTest do
       assert {:error, _} = NxHighlighter.highlight(nil, [])
     end
 
+    test "returns error when internal logic fails", %{tensor: tensor} do
+      # Passing invalid regions to trigger rescue in highlight_tensor
+      # which is then handled by the error branch in highlight
+      assert {:error, _} = NxHighlighter.highlight(tensor, :invalid_regions)
+    end
+
     test "handles empty regions list", %{png_bin: png_bin} do
       assert {:ok, result_png} = NxHighlighter.highlight(png_bin, [])
       assert is_binary(result_png)
+    end
+  end
+
+  describe "highlight_tensor/3" do
+    test "directly highlights a tensor", %{tensor: tensor} do
+      regions = [%{x: 0, y: 0, w: 1, h: 1, color: [255, 0, 0]}]
+      assert {:ok, result_tensor} = NxHighlighter.highlight_tensor(tensor, regions)
+      assert result_tensor[0][0] |> Nx.to_flat_list() == [255, 153, 153]
     end
   end
 
@@ -90,9 +105,8 @@ defmodule NxHighlighterTest do
       # Create a black image
       tensor = Nx.broadcast(0, {10, 10, 3}) |> Nx.as_type(:u8)
       regions = [%{x: 0, y: 0, w: 1, h: 1, color: [255, 255, 255]}]
-      {:ok, result_png} = NxHighlighter.highlight(tensor, regions)
+      {:ok, result_tensor} = NxHighlighter.highlight(tensor, regions)
 
-      result_tensor = StbImage.read_binary!(result_png) |> StbImage.to_nx()
       pixel = result_tensor[0][0] |> Nx.to_flat_list()
 
       # Base: [0, 0, 0], Alpha: 0.4, Highlight: [255, 255, 255]
