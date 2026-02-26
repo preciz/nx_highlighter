@@ -32,7 +32,10 @@ defmodule NxHighlighterTest do
     end
 
     test "returns error on invalid binary input" do
-      assert {:error, _} = NxHighlighter.highlight("not an image", [%{x: 0, y: 0, w: 1, h: 1, color: [0, 0, 0]}])
+      assert {:error, _} =
+               NxHighlighter.highlight("not an image", [
+                 %{x: 0, y: 0, w: 1, h: 1, color: [0, 0, 0]}
+               ])
     end
 
     test "returns error on nil input" do
@@ -46,13 +49,13 @@ defmodule NxHighlighterTest do
   end
 
   describe "blending correctness" do
-    test "correctly blends colors at 0.4 alpha", %{png_bin: png_bin} do
+    test "correctly blends colors at default (0.4) alpha", %{png_bin: png_bin} do
       regions = [%{x: 0, y: 0, w: 1, h: 1, color: [255, 0, 0]}]
       {:ok, result_png} = NxHighlighter.highlight(png_bin, regions)
-      
+
       result_tensor = StbImage.read_binary!(result_png) |> StbImage.to_nx()
       pixel = result_tensor[0][0] |> Nx.to_flat_list()
-      
+
       # Formula: New = Base * (1 - Alpha) + Highlight * Alpha
       # Base: [255, 255, 255], Alpha: 0.4, Highlight: [255, 0, 0]
       # R: 255 * 0.6 + 255 * 0.4 = 153 + 102 = 255
@@ -61,15 +64,37 @@ defmodule NxHighlighterTest do
       assert pixel == [255, 153, 153]
     end
 
+    test "correctly blends colors at custom (1.0) alpha", %{png_bin: png_bin} do
+      regions = [%{x: 0, y: 0, w: 1, h: 1, color: [255, 0, 0]}]
+      {:ok, result_png} = NxHighlighter.highlight(png_bin, regions, alpha: 1.0)
+
+      result_tensor = StbImage.read_binary!(result_png) |> StbImage.to_nx()
+      pixel = result_tensor[0][0] |> Nx.to_flat_list()
+
+      # Alpha 1.0 means full override
+      assert pixel == [255, 0, 0]
+    end
+
+    test "correctly blends colors at custom (0.0) alpha", %{png_bin: png_bin} do
+      regions = [%{x: 0, y: 0, w: 1, h: 1, color: [255, 0, 0]}]
+      {:ok, result_png} = NxHighlighter.highlight(png_bin, regions, alpha: 0.0)
+
+      result_tensor = StbImage.read_binary!(result_png) |> StbImage.to_nx()
+      pixel = result_tensor[0][0] |> Nx.to_flat_list()
+
+      # Alpha 0.0 means no change
+      assert pixel == [255, 255, 255]
+    end
+
     test "highlights correctly on non-white background" do
       # Create a black image
       tensor = Nx.broadcast(0, {10, 10, 3}) |> Nx.as_type(:u8)
       regions = [%{x: 0, y: 0, w: 1, h: 1, color: [255, 255, 255]}]
       {:ok, result_png} = NxHighlighter.highlight(tensor, regions)
-      
+
       result_tensor = StbImage.read_binary!(result_png) |> StbImage.to_nx()
       pixel = result_tensor[0][0] |> Nx.to_flat_list()
-      
+
       # Base: [0, 0, 0], Alpha: 0.4, Highlight: [255, 255, 255]
       # 0 * 0.6 + 255 * 0.4 = 102
       assert pixel == [102, 102, 102]
@@ -82,9 +107,10 @@ defmodule NxHighlighterTest do
         %{x: 10, y: 10, w: 10, h: 10, color: [255, 0, 0]},
         %{x: 20, y: 10, w: 10, h: 10, color: [255, 0, 0]}
       ]
+
       {:ok, result_png} = NxHighlighter.highlight(png_bin, regions)
       result_tensor = StbImage.read_binary!(result_png) |> StbImage.to_nx()
-      
+
       # Check pixel at x=19 (end of first) and x=20 (start of second)
       assert result_tensor[15][19] |> Nx.to_flat_list() == [255, 153, 153]
       assert result_tensor[15][20] |> Nx.to_flat_list() == [255, 153, 153]
@@ -93,11 +119,13 @@ defmodule NxHighlighterTest do
     test "merges regions with a small gap (<= 10px)", %{png_bin: png_bin} do
       regions = [
         %{x: 10, y: 10, w: 10, h: 10, color: [255, 0, 0]},
-        %{x: 25, y: 10, w: 10, h: 10, color: [255, 0, 0]} # 5px gap
+        # 5px gap
+        %{x: 25, y: 10, w: 10, h: 10, color: [255, 0, 0]}
       ]
+
       {:ok, result_png} = NxHighlighter.highlight(png_bin, regions)
       result_tensor = StbImage.read_binary!(result_png) |> StbImage.to_nx()
-      
+
       # Pixel in the gap (x=22) should be highlighted
       assert result_tensor[15][22] |> Nx.to_flat_list() == [255, 153, 153]
     end
@@ -105,11 +133,13 @@ defmodule NxHighlighterTest do
     test "does NOT merge regions with gap > 10px", %{png_bin: png_bin} do
       regions = [
         %{x: 10, y: 10, w: 10, h: 10, color: [255, 0, 0]},
-        %{x: 31, y: 10, w: 10, h: 10, color: [255, 0, 0]} # 11px gap
+        # 11px gap
+        %{x: 31, y: 10, w: 10, h: 10, color: [255, 0, 0]}
       ]
+
       {:ok, result_png} = NxHighlighter.highlight(png_bin, regions)
       result_tensor = StbImage.read_binary!(result_png) |> StbImage.to_nx()
-      
+
       # Pixel in the middle of gap (x=25) should NOT be highlighted
       assert result_tensor[15][25] |> Nx.to_flat_list() == [255, 255, 255]
     end
@@ -119,9 +149,10 @@ defmodule NxHighlighterTest do
         %{x: 10, y: 10, w: 10, h: 10, color: [255, 0, 0]},
         %{x: 20, y: 10, w: 10, h: 10, color: [0, 255, 0]}
       ]
+
       {:ok, result_png} = NxHighlighter.highlight(png_bin, regions)
       result_tensor = StbImage.read_binary!(result_png) |> StbImage.to_nx()
-      
+
       # Red part
       assert result_tensor[15][15] |> Nx.to_flat_list() == [255, 153, 153]
       # Green part
@@ -133,22 +164,12 @@ defmodule NxHighlighterTest do
         %{x: 10, y: 10, w: 10, h: 10, color: [255, 0, 0]},
         %{x: 10, y: 20, w: 10, h: 10, color: [255, 0, 0]}
       ]
+
       {:ok, result_png} = NxHighlighter.highlight(png_bin, regions)
       result_tensor = StbImage.read_binary!(result_png) |> StbImage.to_nx()
-      
-      # Gap between Y=19 and Y=20 (at x=15) should be white
-      assert result_tensor[11][15] |> Nx.to_flat_list() == [255, 153, 153] # inside first
-      assert result_tensor[21][15] |> Nx.to_flat_list() == [255, 153, 153] # inside second
-      assert result_tensor[20][15] |> Nx.to_flat_list() == [255, 153, 153] # boundary (y=20 is inclusive in h=10 if y starts at 10..19)
-      
-      # Wait, if y=10 and h=10, the range is 10..19.
-      # If y=20 and h=10, the range is 20..29.
-      # So y=20 is the start of second box.
-      # Let's check y=20 (second box) and y=19 (first box).
+
       assert result_tensor[19][15] |> Nx.to_flat_list() == [255, 153, 153]
       assert result_tensor[20][15] |> Nx.to_flat_list() == [255, 153, 153]
-      # Wait, they are adjacent in Y but shouldn't merge horizontally.
-      # Let's check a pixel that would be in a "vertical gap" if there was one.
     end
   end
 
@@ -158,12 +179,10 @@ defmodule NxHighlighterTest do
         %{x: 10, y: 10, w: 20, h: 20, color: [255, 0, 0]},
         %{x: 15, y: 15, w: 20, h: 20, color: [255, 0, 0]}
       ]
+
       {:ok, result_png} = NxHighlighter.highlight(png_bin, regions)
       result_tensor = StbImage.read_binary!(result_png) |> StbImage.to_nx()
-      
-      # Overlapping area should have the same color since it's the same color highlight
-      # (Though in some implementations it might get "double highlighted", 
-      # but NxHighlighter uses put_slice so it overwrites if processed in batch loop)
+
       assert result_tensor[17][17] |> Nx.to_flat_list() == [255, 153, 153]
     end
 
@@ -172,12 +191,10 @@ defmodule NxHighlighterTest do
         %{x: 10, y: 10, w: 20, h: 20, color: [255, 0, 0]},
         %{x: 15, y: 15, w: 20, h: 20, color: [0, 255, 0]}
       ]
+
       {:ok, result_png} = NxHighlighter.highlight(png_bin, regions)
       result_tensor = StbImage.read_binary!(result_png) |> StbImage.to_nx()
-      
-      # The second color processed should "win" in the overlap area
-      # Note: group_by order might affect which one wins if they are processed in batches.
-      # Currently it groups by color.
+
       pixel = result_tensor[17][17] |> Nx.to_flat_list()
       assert pixel in [[255, 153, 153], [153, 255, 153]]
     end
@@ -200,9 +217,17 @@ defmodule NxHighlighterTest do
     end
 
     test "handles many regions (batch stress test)", %{png_bin: png_bin} do
-      regions = for i <- 0..20, j <- 0..20 do
-        %{x: i*4, y: j*4, w: 2, h: 2, color: [Enum.random(0..255), Enum.random(0..255), Enum.random(0..255)]}
-      end
+      regions =
+        for i <- 0..20, j <- 0..20 do
+          %{
+            x: i * 4,
+            y: j * 4,
+            w: 2,
+            h: 2,
+            color: [Enum.random(0..255), Enum.random(0..255), Enum.random(0..255)]
+          }
+        end
+
       assert {:ok, _} = NxHighlighter.highlight(png_bin, regions)
     end
   end

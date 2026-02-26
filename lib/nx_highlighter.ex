@@ -4,7 +4,7 @@ defmodule NxHighlighter do
   """
   import Nx.Defn
 
-  @alpha 0.4
+  @default_alpha 0.4
 
   @type region :: %{
           x: integer(),
@@ -18,10 +18,14 @@ defmodule NxHighlighter do
   Highlights the given regions on an image.
   Accepts a PNG/JPEG binary, an StbImage struct, or an Nx.Tensor.
   Returns {:ok, binary} with the modified PNG or {:error, term}.
+
+  Options:
+    * `:alpha` - The blending alpha value (default: 0.4).
   """
-  @spec highlight(binary() | StbImage.t() | Nx.Tensor.t(), [region()]) ::
+  @spec highlight(binary() | StbImage.t() | Nx.Tensor.t(), [region()], keyword()) ::
           {:ok, binary()} | {:error, term()}
-  def highlight(image_input, regions) do
+  def highlight(image_input, regions, opts \\ []) do
+    alpha = Keyword.get(opts, :alpha, @default_alpha)
     tensor = to_tensor(image_input)
     {height, width, _} = Nx.shape(tensor)
 
@@ -55,7 +59,7 @@ defmodule NxHighlighter do
         tensor
         |> Nx.pad(0, [{0, max_h, 0}, {0, max_w, 0}, {0, 0, 0}])
 
-      apply_batch_highlights(padded_image, starts, masks, batch_colors)
+      apply_batch_highlights(padded_image, starts, masks, batch_colors, alpha)
       |> Nx.slice([0, 0, 0], [height, width, 3])
       |> tensor_to_png()
     end
@@ -116,13 +120,13 @@ defmodule NxHighlighter do
     |> then(&{:ok, &1})
   end
 
-  defn apply_batch_highlights(padded_image, starts, masks, colors) do
+  defn apply_batch_highlights(padded_image, starts, masks, colors, alpha) do
     count = Nx.axis_size(starts, 0)
     ph = Nx.axis_size(masks, 1)
     pw = Nx.axis_size(masks, 2)
 
-    {final_image, _, _, _, _, _} =
-      while {canvas = padded_image, original = padded_image, i = 0, starts, masks, colors},
+    {final_image, _, _, _, _, _, _} =
+      while {canvas = padded_image, original = padded_image, i = 0, starts, masks, colors, alpha},
             i < count do
         start_y = starts[i][0]
         start_x = starts[i][1]
@@ -139,13 +143,13 @@ defmodule NxHighlighter do
 
         blended =
           patch_f32
-          |> Nx.multiply(1 - mask_f32 * @alpha)
-          |> Nx.add(color_f32 * mask_f32 * @alpha)
+          |> Nx.multiply(1 - mask_f32 * alpha)
+          |> Nx.add(color_f32 * mask_f32 * alpha)
           |> Nx.as_type(:u8)
 
         updated_canvas = Nx.put_slice(canvas, [start_y, start_x, 0], blended)
 
-        {updated_canvas, original, i + 1, starts, masks, colors}
+        {updated_canvas, original, i + 1, starts, masks, colors, alpha}
       end
 
     final_image
