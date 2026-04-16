@@ -1,7 +1,7 @@
 defmodule NxHighlighter.MixProject do
   use Mix.Project
 
-  @version "0.1.0"
+  @version "0.1.1"
   @description "Image highlighting using Nx and tensors."
 
   def project do
