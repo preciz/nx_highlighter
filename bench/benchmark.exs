@@ -32,9 +32,6 @@ Benchee.run(
   %{
     "NxHighlighter (V1)" => fn regions ->
       {:ok, _} = NxHighlighter.highlight(tensor, regions)
-    end,
-    "NxHighlighterV4 (Tiled)" => fn regions ->
-      {:ok, _} = NxHighlighterV4.highlight(tensor, regions)
     end
   },
   inputs: inputs,
