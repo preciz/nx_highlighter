@@ -188,12 +188,15 @@ defmodule NxHighlighter do
         mask = masks[i]
         color = colors[i]
 
-        patch = Nx.slice(original, [start_y, start_x, 0], [ph, pw, 3])
+        # Slice original for the "one highlight wins" base
+        original_patch = Nx.slice(original, [start_y, start_x, 0], [ph, pw, 3])
+        # Slice canvas to preserve other highlights in the same patch area
+        canvas_patch = Nx.slice(canvas, [start_y, start_x, 0], [ph, pw, 3])
+
         mask_3d = Nx.broadcast(Nx.new_axis(mask, -1), {ph, pw, 3})
         color_3d = Nx.broadcast(color, {ph, pw, 3})
 
-        patch_f32 = Nx.as_type(patch, :f32)
-        mask_f32 = Nx.as_type(mask_3d, :f32)
+        patch_f32 = Nx.as_type(original_patch, :f32)
         color_f32 = Nx.as_type(color_3d, :f32)
 
         blended =
@@ -201,12 +204,13 @@ defmodule NxHighlighter do
           |> Nx.add(
             color_f32
             |> Nx.subtract(patch_f32)
-            |> Nx.multiply(mask_f32)
             |> Nx.multiply(alpha)
           )
           |> Nx.as_type(:u8)
 
-        updated_canvas = Nx.put_slice(canvas, [start_y, start_x, 0], blended)
+        # Only apply the blend where the mask is true; otherwise keep canvas
+        updated_patch = Nx.select(mask_3d, blended, canvas_patch)
+        updated_canvas = Nx.put_slice(canvas, [start_y, start_x, 0], updated_patch)
 
         {updated_canvas, original, i + 1, starts, masks, colors, alpha}
       end
